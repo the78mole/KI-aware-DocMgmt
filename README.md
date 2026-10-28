@@ -24,6 +24,27 @@ KI-gestütztes Dokumentenmanagement.
 pre-commit install
 ```
 
+## Compose-Stack
+
+Startet DocMgmt (API + SPA auf `:8000`), PostgreSQL und Garage als S3-Speicher.
+`scripts/dev-secrets.sh` ergänzt die `.env` um zufällige Secrets, vorhandene Werte bleiben erhalten.
+
+```bash
+./scripts/dev-secrets.sh
+docker compose up -d --build
+curl -F file=@datenblatt.pdf -F title="LM317" localhost:8000/api/documents
+```
+
+`garage-init` legt beim Start Layout, Bucket und Zugangsschlüssel per Admin-API an und ist idempotent.
+Um später auf einen externen S3-Speicher umzuziehen, genügen die `S3_*`-Variablen.
+
+| Endpunkt | Zweck |
+|---|---|
+| `POST /api/documents` | PDF einchecken (multipart: `file`, optional `title`), Duplikate per SHA-256 → `409` |
+| `GET /api/documents` | Liste, neueste zuerst |
+| `GET /api/documents/{id}` | Metadaten |
+| `GET /api/documents/{id}/file` | Original-PDF |
+
 ## OpenBao
 
 Credentials kommen aus OpenBao, Namespace `it-infra` (KV v2 unter `secret/`).

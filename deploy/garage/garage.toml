@@ -1,0 +1,17 @@
+# Garage-Konfiguration für den lokalen Compose-Stack (ein Knoten, keine Replikation).
+# rpc_secret und admin_token kommen aus GARAGE_RPC_SECRET / GARAGE_ADMIN_TOKEN.
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+replication_factor = 1
+
+# 0.0.0.0 statt [::], damit Garage auch auf Hosts ohne IPv6 startet
+rpc_bind_addr = "0.0.0.0:3901"
+rpc_public_addr = "127.0.0.1:3901"
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "0.0.0.0:3900"
+
+[admin]
+api_bind_addr = "0.0.0.0:3903"
