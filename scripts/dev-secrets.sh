@@ -5,7 +5,13 @@ cd "$(dirname "$0")/.."
 touch .env && chmod 600 .env
 
 add() {
-  grep -q "^$1=" .env || echo "$1=$2" >> .env
+  if grep -q "^$1=." .env; then
+    return
+  elif grep -q "^$1=$" .env; then
+    sed -i "s|^$1=$|$1=$2|" .env   # leere Zeile aus .env.example füllen
+  else
+    echo "$1=$2" >> .env
+  fi
 }
 
 add POSTGRES_PASSWORD "$(openssl rand -hex 24)"
