@@ -7,6 +7,7 @@ repos:
       - id: check-yaml
       - id: check-toml
       - id: check-json
+        exclude: tsconfig.*\.json$
       - id: check-added-large-files
       - id: check-merge-conflict
       - id: debug-statements
@@ -16,3 +17,28 @@ repos:
     rev: 0.39.0
     hooks:
       - id: check-github-workflows
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.3
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+        files: ^backend/
+      - id: ruff-format
+        files: ^backend/
+
+  # Voraussetzung: `npm install` in frontend/ wurde ausgefuehrt
+  - repo: local
+    hooks:
+      - id: oxlint
+        name: oxlint
+        entry: npm --prefix frontend run lint
+        language: system
+        files: ^frontend/.*\.(js|jsx|ts|tsx)$
+        pass_filenames: false
+      - id: prettier
+        name: Prettier
+        entry: npm --prefix frontend run format
+        language: system
+        files: ^frontend/.*\.(js|jsx|ts|tsx|css|json|md|html)$
+        pass_filenames: false

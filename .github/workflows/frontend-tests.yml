@@ -1,0 +1,36 @@
+name: Frontend Tests
+
+on:
+  push:
+    branches: [main]
+    paths: ["frontend/**", ".github/workflows/frontend-tests.yml"]
+  pull_request:
+    paths: ["frontend/**", ".github/workflows/frontend-tests.yml"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run test -- --coverage
+      - run: npm run build
+      - name: Coverage summary
+        if: always()
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY <<EOF
+          ## 🧪 Frontend coverage
+          \`\`\`json
+          $(cat coverage/coverage-summary.json 2>/dev/null | jq .total || echo "no coverage report")
+          \`\`\`
+          EOF
