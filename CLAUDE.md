@@ -52,7 +52,9 @@ pre-commit run --all-files
   oxlint/Prettier als lokale Hooks (setzen `npm install` in `frontend/` voraus). `tsconfig*.json`
   sind JSONC und von `check-json` ausgenommen. Vor jedem Commit muss der Lauf grün sein.
 - **CI:** `.github/workflows/backend-tests.yml` und `frontend-tests.yml`, jeweils nur bei
-  Änderungen im eigenen Verzeichnis (path-gefiltert). Action-Versionen vor jeder Änderung prüfen
+  Änderungen im eigenen Verzeichnis (path-gefiltert). `marker-image.yml` baut `deploy/marker/` und pusht
+  auf `main` nach GHCR (`ki-aware-docmgmt-marker`), auf PRs wird nur gebaut. Die marker-Version steht als
+  `ARG MARKER_VERSION` im Dockerfile und wird zum Image-Tag. Action-Versionen vor jeder Änderung prüfen
   (`gh api repos/<owner>/<repo>/releases/latest`). Floating Major nehmen, wo es eines gibt
   (`actions/checkout@v7`, `actions/setup-node@v7`), `astral-sh/setup-uv` exakt pinnen (`v10.3.2`).
 - **Renovate:** `renovate.json` ist Daniels feste Baseline, nicht verändern.

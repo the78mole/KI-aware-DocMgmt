@@ -28,6 +28,8 @@ pre-commit install
 
 Startet DocMgmt (API + SPA auf `:8000`), den Konvertierungs-Worker, marker-pdf (nur CPU), PostgreSQL und
 Garage als S3-Speicher. marker lädt beim ersten Start seine Modelle (mehrere GB) ins Volume `marker-models`.
+Das marker-Image (`deploy/marker/`) baut die CI und legt es als `ghcr.io/the78mole/ki-aware-docmgmt-marker` ab,
+getaggt mit der marker-Version, `latest` und dem Commit-SHA. `MARKER_IMAGE_TAG` wählt die Version im Stack.
 `scripts/dev-secrets.sh` ergänzt die `.env` um zufällige Secrets, vorhandene Werte bleiben erhalten.
 
 ```bash

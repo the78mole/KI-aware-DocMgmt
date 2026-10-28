@@ -45,10 +45,10 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # marker-pdf nur auf CPU; lädt beim ersten Start die Modelle (mehrere GB) ins Volume
+  # marker-pdf nur auf CPU; lädt beim ersten Start die Modelle (mehrere GB) ins Volume.
+  # Das Image baut die CI (.github/workflows/marker-image.yml) und legt es in GHCR ab.
   marker:
-    image: ki-aware-docmgmt-marker:local
-    build: deploy/marker
+    image: ghcr.io/the78mole/ki-aware-docmgmt-marker:${MARKER_IMAGE_TAG:-2.0.0}
     volumes:
       - marker-models:/models
     restart: unless-stopped
