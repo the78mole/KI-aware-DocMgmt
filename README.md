@@ -26,7 +26,8 @@ pre-commit install
 
 ## Compose-Stack
 
-Startet DocMgmt (API + SPA auf `:8000`), PostgreSQL und Garage als S3-Speicher.
+Startet DocMgmt (API + SPA auf `:8000`), den Konvertierungs-Worker, marker-pdf (nur CPU), PostgreSQL und
+Garage als S3-Speicher. marker lädt beim ersten Start seine Modelle (mehrere GB) ins Volume `marker-models`.
 `scripts/dev-secrets.sh` ergänzt die `.env` um zufällige Secrets, vorhandene Werte bleiben erhalten.
 
 ```bash
@@ -36,7 +37,12 @@ curl -F file=@datenblatt.pdf -F title="LM317" localhost:8000/api/documents
 ```
 
 `garage-init` legt beim Start Layout, Bucket und Zugangsschlüssel per Admin-API an und ist idempotent.
-Um später auf einen externen S3-Speicher umzuziehen, genügen die `S3_*`-Variablen.
+Um später auf externe Dienste umzuziehen, genügen die `S3_*`-Variablen bzw. `MARKER_URL`.
+
+Jedes eingecheckte PDF bekommt eine Konvertierung im Status `pending`. Der Worker holt sie aus Postgres
+(`FOR UPDATE SKIP LOCKED`), schickt das PDF an marker und speichert Markdown und Metadaten (`jsonb`) in der
+Tabelle `conversions`, die Bilder in S3 unter `documents/{id}/conversions/{conversion_id}/`. Jeder Lauf bleibt
+erhalten, ausgeliefert wird der neueste erfolgreiche. Das Schema verwaltet Alembic, die API migriert beim Start.
 
 | Endpunkt | Zweck |
 |---|---|
@@ -44,6 +50,10 @@ Um später auf einen externen S3-Speicher umzuziehen, genügen die `S3_*`-Variab
 | `GET /api/documents` | Liste, neueste zuerst |
 | `GET /api/documents/{id}` | Metadaten |
 | `GET /api/documents/{id}/file` | Original-PDF |
+| `GET /api/documents/{id}/markdown` | Markdown der neuesten erfolgreichen Konvertierung (Header `X-Conversion-Id`) |
+| `GET /api/documents/{id}/conversions` | Alle Konvertierungsläufe mit Status, Fehler, Bildliste |
+| `POST /api/documents/{id}/conversions` | Neue Konvertierung anstoßen (`409`, solange eine läuft) |
+| `GET /api/documents/{id}/conversions/{cid}/assets/{name}` | Bild aus dem Markdown |
 
 ## OpenBao
 

@@ -8,7 +8,7 @@ from sqlalchemy import Engine, create_engine
 
 from docmgmt.api import documents
 from docmgmt.config import Settings, get_settings
-from docmgmt.db import Base
+from docmgmt.db import migrate
 from docmgmt.storage import ObjectStorage, S3Storage
 
 
@@ -21,8 +21,7 @@ def create_app(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.engine = engine or create_engine(settings.database_url, pool_pre_ping=True)
         app.state.storage = storage or S3Storage.from_settings(settings)
-        # Bis Alembic eingeführt ist, legt der Start fehlende Tabellen an
-        Base.metadata.create_all(app.state.engine)
+        migrate(app.state.engine)
         yield
         if engine is None:
             app.state.engine.dispose()

@@ -21,7 +21,7 @@ def test_upload_stores_pdf_and_metadata(client: TestClient, storage: InMemorySto
     assert body["filename"] == "LM317.pdf"
     assert body["size"] == len(PDF)
     assert body["sha256"] == hashlib.sha256(PDF).hexdigest()
-    assert body["markdown_status"] == "pending"
+    assert body["conversion_status"] == "pending"
     assert storage.objects[f"documents/{body['id']}/original.pdf"] == (PDF, "application/pdf")
 
 

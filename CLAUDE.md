@@ -21,7 +21,14 @@ Zugriff über UI, REST-API und HTTP-MCP.
 Bisher implementiert: `GET /api/health`, Check-in `POST/GET /api/documents[/{id}[/file]]` (Postgres-Metadaten,
 PDF in S3 unter `documents/{id}/original.pdf`, Dedup per SHA-256) und `compose.yaml` mit DocMgmt, Postgres und
 Garage. Das Backend-Image liefert die gebaute SPA mit aus (`STATIC_DIR`). Der Vite-Dev-Server leitet `/api` auf
-`http://127.0.0.1:8000` weiter. Tabellen entstehen noch per `create_all` beim Start, Alembic fehlt.
+`http://127.0.0.1:8000` weiter.
+
+Konvertierung: Tabelle `conversions` (1:n zum Dokument, jeder marker-Lauf bleibt erhalten). Markdown (`text`) und
+marker-Metadaten (`jsonb`) liegen in Postgres, Bilder in S3 unter `documents/{id}/conversions/{cid}/`.
+`docmgmt.worker` nutzt Postgres als Queue und spricht `marker_server` (`POST /marker/upload`) über
+`MarkerServerConverter`; ein weiterer Converter für holy-moly-mcp kann dasselbe Protokoll implementieren.
+Schema per Alembic (`src/docmgmt/migrations`, Konfiguration in `pyproject.toml`), die API migriert beim Start.
+Neue Migration: `DATABASE_URL=sqlite:////tmp/x.db uv run alembic upgrade head && … alembic revision --autogenerate`.
 
 Infrastruktur: zunächst alles im Compose-Stack, später extern (Garage-VM als S3, marker über den Dienst
 holy-moly-mcp). Der Server hat nur CPU. Garage bindet an `0.0.0.0`, weil nicht jeder Host IPv6 hat.
@@ -73,8 +80,8 @@ pre-commit run --all-files
 
 ## Offene Punkte / nächste Schritte
 
-1. **marker-Pipeline:** CPU-Container im Compose-Stack, Hintergrundjob setzt `markdown_status`, Markdown nach
-   `documents/{id}/markdown.md`. Danach UI (Upload, Liste, PDF/Markdown nebeneinander) und HTTP-MCP.
+1. **marker mit echten Datenblättern auf debian-test prüfen** (marker 2.0 auf CPU im Modus `fast`), danach
+   UI (Upload, Liste, PDF/Markdown nebeneinander) und HTTP-MCP.
 2. **Anforderungen klären:** Welche Dokumente kommen woher, was soll die KI tun (Klassifikation,
    Extraktion, Suche/RAG, Tagging), wer nutzt die App, und wie wird authentifiziert
    (Keycloak liegt in `it-infra`, es gibt `keycloak` und `bookstack-oidc` als Vorbild für OIDC)?

@@ -17,6 +17,14 @@ class Settings(BaseSettings):
     s3_access_key_id: str = ""
     s3_secret_access_key: SecretStr = SecretStr("")
 
+    # marker_server (CPU-Container im Stack, später holy-moly-mcp)
+    marker_url: str = "http://127.0.0.1:8001"
+    marker_label: str = "marker-pdf 2.0.0"
+    # "fast" = CPU-Layout, kaum VLM; leer = marker entscheidet nach Gerät
+    marker_mode: str = "fast"
+    conversion_timeout_seconds: int = 3600
+    worker_poll_seconds: float = 5.0
+
     # Verzeichnis mit der gebauten SPA; leer = keine statischen Dateien ausliefern
     static_dir: str = ""
 

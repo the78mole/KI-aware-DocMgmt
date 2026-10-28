@@ -1,4 +1,5 @@
 import hashlib
+import mimetypes
 import tempfile
 import uuid
 from datetime import datetime
@@ -7,13 +8,13 @@ from typing import Annotated
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from docmgmt.db import get_session
-from docmgmt.models import Document, MarkdownStatus
+from docmgmt.models import Conversion, ConversionStatus, Document
 from docmgmt.storage import CHUNK_SIZE, ObjectNotFoundError, ObjectStorage, get_storage
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
@@ -33,8 +34,21 @@ class DocumentOut(BaseModel):
     content_type: str
     size: int
     sha256: str
-    markdown_status: MarkdownStatus
+    conversion_status: ConversionStatus | None
     created_at: datetime
+
+
+class ConversionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    status: ConversionStatus
+    converter: str | None
+    assets: list[str]
+    error: str | None
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
 
 
 def _get_or_404(session: Session, document_id: uuid.UUID) -> Document:
@@ -86,6 +100,7 @@ def upload_document(
         size=size,
         sha256=sha256,
         s3_key=s3_key,
+        conversions=[Conversion()],
     )
     session.add(document)
     session.commit()
@@ -102,16 +117,58 @@ def get_document(session: SessionDep, document_id: uuid.UUID) -> Document:
     return _get_or_404(session, document_id)
 
 
+def _stream(storage: ObjectStorage, key: str, media_type: str, headers: dict[str, str] | None = None):
+    try:
+        body = storage.open(key)
+    except ObjectNotFoundError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Datei fehlt im Speicher") from exc
+    return StreamingResponse(body, media_type=media_type, headers=headers)
+
+
 @router.get("/{document_id}/file")
 def download_document(session: SessionDep, storage: StorageDep, document_id: uuid.UUID) -> StreamingResponse:
     document = _get_or_404(session, document_id)
-    try:
-        body = storage.open(document.s3_key)
-    except ObjectNotFoundError as exc:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Datei fehlt im Speicher") from exc
-    return StreamingResponse(
-        body,
-        media_type=document.content_type,
+    return _stream(
+        storage,
+        document.s3_key,
+        document.content_type,
         # RFC 5987, damit auch Umlaute und Sonderzeichen im Dateinamen ankommen
         headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(document.filename)}"},
     )
+
+
+@router.get("/{document_id}/markdown", response_class=PlainTextResponse)
+def get_markdown(session: SessionDep, document_id: uuid.UUID) -> PlainTextResponse:
+    """Markdown der neuesten erfolgreichen Konvertierung. Bilder liegen unter …/conversions/{id}/assets/."""
+    document = _get_or_404(session, document_id)
+    done = next((c for c in document.conversions if c.status == ConversionStatus.DONE), None)
+    if done is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Noch keine fertige Konvertierung")
+    return PlainTextResponse(
+        done.markdown or "", media_type="text/markdown; charset=utf-8", headers={"X-Conversion-Id": str(done.id)}
+    )
+
+
+@router.get("/{document_id}/conversions", response_model=list[ConversionOut])
+def list_conversions(session: SessionDep, document_id: uuid.UUID) -> list[Conversion]:
+    return _get_or_404(session, document_id).conversions
+
+
+@router.post("/{document_id}/conversions", status_code=status.HTTP_202_ACCEPTED, response_model=ConversionOut)
+def request_conversion(session: SessionDep, document_id: uuid.UUID) -> Conversion:
+    """Stößt eine neue Konvertierung an, z. B. nach einem Fehler oder mit neuerer marker-Version."""
+    document = _get_or_404(session, document_id)
+    if any(c.status in (ConversionStatus.PENDING, ConversionStatus.PROCESSING) for c in document.conversions):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Eine Konvertierung läuft bereits")
+    conversion = Conversion(document=document)
+    session.add(conversion)
+    session.commit()
+    return conversion
+
+
+@router.get("/{document_id}/conversions/{conversion_id}/assets/{name}")
+def get_asset(session: SessionDep, storage: StorageDep, document_id: uuid.UUID, conversion_id: uuid.UUID, name: str):
+    conversion = session.get(Conversion, conversion_id)
+    if conversion is None or conversion.document_id != document_id or name not in conversion.assets:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Bild nicht gefunden")
+    return _stream(storage, conversion.asset_key(name), mimetypes.guess_type(name)[0] or "application/octet-stream")
