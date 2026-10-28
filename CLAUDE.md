@@ -64,8 +64,11 @@ pre-commit run --all-files
 
 ## OpenBao (Secrets)
 
+Die App braucht OpenBao nicht: Konfiguration kommt aus Umgebungsvariablen, OpenBao ist eine optionale
+Zusatzquelle (`docmgmt.openbao`, aktiv nur mit `BAO_SECRET_PATH`, siehe README). Für Daniels Arbeitsplatz gilt:
+
 - Server `https://openbao.intern.chaintronics.com/`, Namespace **`it-infra`**, KV v2 unter `secret/`.
-- `.envrc` und `.env` (mode 600, gitignored) setzen ein **scoped, nur lesendes** Token
+- Lokal setzen `.envrc` und `.env` (mode 600, gitignored) ein **scoped, nur lesendes** Token
   (`token-ki-aware-docmgmt`, Policies `default` + `it-infra-read`, verifiziert 2026-10-28).
   Schreiben ist absichtlich nicht möglich. Wenn ein Secret geschrieben werden muss, Daniel fragen.
 - **Wichtig für Claude Desktop:** direnv greift nur in interaktiven Shells. Deshalb jeden `bao`-Aufruf
@@ -77,8 +80,7 @@ pre-commit run --all-files
   ansehen: `bao kv get -format=json secret/<name> | jq '.data.data|keys'`.
 - Ein Eintrag ist ein KeePass-artiger Datensatz: `url` plus `username`/`password` oder
   `token`/`api_key`, dazu `notes`. Feldnamen in `snake_case`.
-- Die App selbst soll Credentials zur Laufzeit aus OpenBao beziehen. Keine Secrets in Code,
-  Config-Dateien, Container-Images oder CI-Variablen ohne Rücksprache.
+- Keine Secrets in Code, Config-Dateien, Container-Images oder CI-Variablen ohne Rücksprache.
 
 ## Offene Punkte / nächste Schritte
 

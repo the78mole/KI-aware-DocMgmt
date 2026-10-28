@@ -57,14 +57,31 @@ erhalten, ausgeliefert wird der neueste erfolgreiche. Das Schema verwaltet Alemb
 | `POST /api/documents/{id}/conversions` | Neue Konvertierung anstoßen (`409`, solange eine läuft) |
 | `GET /api/documents/{id}/conversions/{cid}/assets/{name}` | Bild aus dem Markdown |
 
-## OpenBao
+## Konfiguration
 
-Credentials kommen aus OpenBao, Namespace `it-infra` (KV v2 unter `secret/`).
-direnv lädt beim Betreten des Verzeichnisses die `.env` (gitignored, mode 600) mit
-einem scoped, nur lesenden Token und ersetzt damit den `~/GIT`-Sperr-Riegel.
+Alle Einstellungen kommen aus Umgebungsvariablen. Vorlage mit allen Variablen: [`.env.example`](.env.example).
+
+| Variable | Standard | Zweck |
+|---|---|---|
+| `DATABASE_URL` | `postgresql+psycopg://docmgmt:docmgmt@127.0.0.1:5432/docmgmt` | Postgres |
+| `S3_ENDPOINT_URL`, `S3_REGION`, `S3_BUCKET` | `http://127.0.0.1:3900`, `garage`, `docmgmt` | S3-Speicher |
+| `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` | leer | S3-Zugang |
+| `MARKER_URL`, `MARKER_MODE` | `http://127.0.0.1:8001`, `fast` | marker_server |
+| `CONVERSION_TIMEOUT_SECONDS`, `WORKER_POLL_SECONDS` | `3600`, `5` | Worker |
+| `STATIC_DIR` | leer | gebaute SPA ausliefern |
+
+### Optional: Secrets aus OpenBao oder Vault
+
+Ist `BAO_SECRET_PATH` gesetzt, liest die App beim Start zusätzlich einen oder mehrere KV-v2-Einträge
+(kommagetrennt, spätere überschreiben frühere). Die Schlüssel heißen wie die Einstellungen in Kleinschreibung,
+z. B. `s3_secret_access_key` oder `database_url`; andere Schlüssel werden ignoriert. Umgebungsvariablen haben
+Vorrang. Ist der Eintrag nicht lesbar, bricht der Start ab.
 
 ```bash
-cp .env.example .env && chmod 600 .env   # Token eintragen
-direnv allow
-bao kv list secret/
+BAO_ADDR=https://openbao.example.com/   # oder VAULT_ADDR
+BAO_TOKEN=…                             # oder VAULT_TOKEN
+BAO_NAMESPACE=it-infra                  # optional
+BAO_SECRET_PATH=secret/ki-aware-docmgmt
 ```
+
+Im Compose-Stack reicht man diese Variablen per `compose.override.yaml` an `docmgmt` und `worker` weiter.

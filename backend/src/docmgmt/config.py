@@ -1,13 +1,26 @@
 from functools import lru_cache
 
 from pydantic import SecretStr
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
+
+from docmgmt.openbao import with_openbao
 
 
 class Settings(BaseSettings):
-    """Laufzeitkonfiguration, aus Umgebungsvariablen gelesen (z. B. aus dem Compose-Stack)."""
+    """Laufzeitkonfiguration aus Umgebungsvariablen, optional ergänzt aus OpenBao (siehe docmgmt.openbao)."""
 
     model_config = SettingsConfigDict(env_file=None, extra="ignore")
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        return with_openbao(settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings)
 
     database_url: str = "postgresql+psycopg://docmgmt:docmgmt@127.0.0.1:5432/docmgmt"
 
