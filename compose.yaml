@@ -1,0 +1,101 @@
+# Lokaler Stack: DocMgmt + Worker + marker (CPU) + PostgreSQL + Garage (S3).
+# Secrets kommen aus .env, siehe scripts/dev-secrets.sh. Später werden Garage und marker
+# durch die externen Dienste ersetzt, dafür nur die S3_*-Variablen und MARKER_URL umstellen.
+
+x-s3-env: &s3-env
+  S3_ENDPOINT_URL: http://garage:3900
+  S3_REGION: garage
+  S3_BUCKET: ${S3_BUCKET:-docmgmt}
+  S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?S3_ACCESS_KEY_ID fehlt, scripts/dev-secrets.sh ausführen}
+  S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY fehlt}
+
+services:
+  docmgmt:
+    image: ki-aware-docmgmt:local
+    build: .
+    ports:
+      - "${DOCMGMT_PORT:-8000}:8000"
+    environment:
+      <<: *s3-env
+      DATABASE_URL: &database-url postgresql+psycopg://docmgmt:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt}@postgres:5432/docmgmt
+    depends_on:
+      postgres:
+        condition: service_healthy
+      garage-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # Wandelt eingecheckte PDFs mit marker in Markdown um (Postgres dient als Warteschlange)
+  worker:
+    image: ki-aware-docmgmt:local
+    pull_policy: never
+    command: ["python", "-m", "docmgmt.worker"]
+    environment:
+      <<: *s3-env
+      DATABASE_URL: *database-url
+      MARKER_URL: ${MARKER_URL:-http://marker:8001}
+      MARKER_MODE: ${MARKER_MODE:-fast}
+    depends_on:
+      docmgmt:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # marker-pdf nur auf CPU; lädt beim ersten Start die Modelle (mehrere GB) ins Volume.
+  # Das Image baut die CI (.github/workflows/marker-image.yml) und legt es in GHCR ab.
+  marker:
+    image: ghcr.io/the78mole/ki-aware-docmgmt-marker:${MARKER_IMAGE_TAG:-2.0.0}
+    volumes:
+      - marker-models:/models
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: docmgmt
+      POSTGRES_DB: docmgmt
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docmgmt -d docmgmt"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  garage:
+    image: dxflrs/garage:v2.5.0
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?GARAGE_RPC_SECRET fehlt}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:?GARAGE_ADMIN_TOKEN fehlt}
+    volumes:
+      - ./deploy/garage/garage.toml:/etc/garage.toml:ro
+      - garage-meta:/var/lib/garage/meta
+      - garage-data:/var/lib/garage/data
+    ports:
+      - "127.0.0.1:${GARAGE_S3_PORT:-3900}:3900"
+    restart: unless-stopped
+
+  # nutzt das DocMgmt-Image, weil es Python schon mitbringt
+  garage-init:
+    image: ki-aware-docmgmt:local
+    pull_policy: never
+    command: ["python", "/init.py"]
+    environment:
+      <<: *s3-env
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:?GARAGE_ADMIN_TOKEN fehlt}
+    volumes:
+      - ./deploy/garage/init.py:/init.py:ro
+    depends_on:
+      - garage
+
+volumes:
+  marker-models:
+  postgres-data:
+  garage-meta:
+  garage-data:
